@@ -142,6 +142,25 @@ cloudflare:
     key: api-key
 ```
 
+##### RFC2136
+
+```yaml
+rfc2136:
+  nameserver: 192.168.0.1
+  TSIGKey: tsig-key
+  TSIGSecretSecretRef:
+    name: tsig-secret
+    key: secret
+rfc2136:
+  nameserver: 192.168.0.1
+  TSIGKey: tsig-key
+  TSIGSecretSecretRef:
+    name: tsig-secret
+    key: secret
+  TSIGAlgorithm: HmacMD5 
+  timeout: 60
+```
+
 ## CA Configuration
 
 CA Issuers issue certificates signed from a X509 signing keypair, stored in a

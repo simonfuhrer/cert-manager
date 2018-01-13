@@ -114,6 +114,7 @@ type ACMEIssuerDNS01Provider struct {
 	CloudDNS   *ACMEIssuerDNS01ProviderCloudDNS   `json:"clouddns,omitempty"`
 	Cloudflare *ACMEIssuerDNS01ProviderCloudflare `json:"cloudflare,omitempty"`
 	Route53    *ACMEIssuerDNS01ProviderRoute53    `json:"route53,omitempty"`
+	RFC2136    *ACMEIssuerDNS01ProviderRFC2136    `json:"rfc2136,omitempty"`
 }
 
 // ACMEIssuerDNS01ProviderCloudDNS is a structure containing the DNS
@@ -137,6 +138,16 @@ type ACMEIssuerDNS01ProviderRoute53 struct {
 	SecretAccessKey SecretKeySelector `json:"secretAccessKeySecretRef"`
 	HostedZoneID    string            `json:"hostedZoneID"`
 	Region          string            `json:"region"`
+}
+
+// ACMEIssuerDNS01ProviderRFC2136 is a structure containing the DNS
+// configuration for RFC2136
+type ACMEIssuerDNS01ProviderRFC2136 struct {
+	Nameserver    string            `json:"nameserver"`
+	TSIGSecret    SecretKeySelector `json:"TSIGSecretSecretRef"`
+	TSIGKey       string            `json:"TSIGKey"`
+	TSIGAlgorithm string            `json:"TSIGAlgorithm"`
+	Timeout       string            `json:"timeout"`
 }
 
 // IssuerStatus contains status information about an Issuer
