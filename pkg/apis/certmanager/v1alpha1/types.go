@@ -20,6 +20,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	AltNamesAnnotationKey   = "certmanager.k8s.io/alt-names"
+	CommonNameAnnotationKey = "certmanager.k8s.io/common-name"
+	IssuerNameAnnotationKey = "certmanager.k8s.io/issuer-name"
+	IssuerKindAnnotationKey = "certmanager.k8s.io/issuer-kind"
+)
+
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:openapi-gen=true
@@ -74,8 +81,38 @@ type IssuerSpec struct {
 }
 
 type IssuerConfig struct {
-	ACME *ACMEIssuer `json:"acme,omitempty"`
-	CA   *CAIssuer   `json:"ca,omitempty"`
+	ACME       *ACMEIssuer       `json:"acme,omitempty"`
+	CA         *CAIssuer         `json:"ca,omitempty"`
+	Vault      *VaultIssuer      `json:"vault,omitempty"`
+	SelfSigned *SelfSignedIssuer `json:"selfSigned,omitempty"`
+}
+
+type SelfSignedIssuer struct {
+}
+
+type VaultIssuer struct {
+	// Vault authentication
+	Auth VaultAuth `json:"auth"`
+	// Server is the vault connection address
+	Server string `json:"server"`
+	// Vault URL path to the certificate role
+	Path string `json:"path"`
+}
+
+// Vault authentication  can be configured:
+// - With a secret containing a token. Cert-manager is using this token as-is.
+// - With a secret containing a AppRole. This AppRole is used to authenticate to
+//   Vault and retrieve a token.
+type VaultAuth struct {
+	// This Secret contains the Vault token key
+	TokenSecretRef SecretKeySelector `json:"tokenSecretRef,omitempty"`
+	// This Secret contains a AppRole and Secret
+	AppRole VaultAppRole `json:"appRole,omitempty"`
+}
+
+type VaultAppRole struct {
+	RoleId    string            `json:"roleId"`
+	SecretRef SecretKeySelector `json:"secretRef"`
 }
 
 type CAIssuer struct {
@@ -90,6 +127,8 @@ type ACMEIssuer struct {
 	Email string `json:"email"`
 	// Server is the ACME server URL
 	Server string `json:"server"`
+	// If true, skip verifying the ACME server TLS certificate
+	SkipTLSVerify bool `json:"skipTLSVerify,omitempty"`
 	// PrivateKey is the name of a secret containing the private key for this
 	// user account.
 	PrivateKey SecretKeySelector `json:"privateKeySecretRef"`
@@ -111,10 +150,21 @@ type ACMEIssuerDNS01Config struct {
 type ACMEIssuerDNS01Provider struct {
 	Name string `json:"name"`
 
+	Akamai     *ACMEIssuerDNS01ProviderAkamai     `json:"akamai,omitempty"`
 	CloudDNS   *ACMEIssuerDNS01ProviderCloudDNS   `json:"clouddns,omitempty"`
 	Cloudflare *ACMEIssuerDNS01ProviderCloudflare `json:"cloudflare,omitempty"`
 	Route53    *ACMEIssuerDNS01ProviderRoute53    `json:"route53,omitempty"`
+	AzureDNS   *ACMEIssuerDNS01ProviderAzureDNS   `json:"azuredns,omitempty"`
 	RFC2136    *ACMEIssuerDNS01ProviderRFC2136    `json:"rfc2136,omitempty"`
+}
+
+// ACMEIssuerDNS01ProviderAkamai is a structure containing the DNS
+// configuration for Akamai DNS—Zone Record Management API
+type ACMEIssuerDNS01ProviderAkamai struct {
+	ServiceConsumerDomain string            `json:"serviceConsumerDomain"`
+	ClientToken           SecretKeySelector `json:"clientTokenSecretRef"`
+	ClientSecret          SecretKeySelector `json:"clientSecretSecretRef"`
+	AccessToken           SecretKeySelector `json:"accessTokenSecretRef"`
 }
 
 // ACMEIssuerDNS01ProviderCloudDNS is a structure containing the DNS
@@ -140,6 +190,19 @@ type ACMEIssuerDNS01ProviderRoute53 struct {
 	Region          string            `json:"region"`
 }
 
+// ACMEIssuerDNS01ProviderAzureDNS is a structure containing the
+// configuration for Azure DNS
+type ACMEIssuerDNS01ProviderAzureDNS struct {
+	ClientID          string            `json:"clientID"`
+	ClientSecret      SecretKeySelector `json:"clientSecretSecretRef"`
+	SubscriptionID    string            `json:"subscriptionID"`
+	TenantID          string            `json:"tenantID"`
+	ResourceGroupName string            `json:"resourceGroupName"`
+
+	// + optional
+	HostedZoneName string `json:"hostedZoneName"`
+}
+
 // TSGIG HMAC hashing codes
 type TSIGAlgorithm string
 
@@ -157,7 +220,7 @@ type ACMEIssuerDNS01ProviderRFC2136 struct {
 	TSIGSecret    SecretKeySelector `json:"tsigSecretSecretRef"`
 	TSIGKey       string            `json:"tsigKey"`
 	TSIGAlgorithm TSIGAlgorithm     `json:"tsigAlgorithm"`
-	Timeout       string            `json:"timeout"`
+	//Timeout       string            `json:"timeout"`
 }
 
 // IssuerStatus contains status information about an Issuer
@@ -269,9 +332,13 @@ type ACMECertificateConfig struct {
 }
 
 type ACMECertificateDomainConfig struct {
-	Domains []string                     `json:"domains"`
-	HTTP01  *ACMECertificateHTTP01Config `json:"http01,omitempty"`
-	DNS01   *ACMECertificateDNS01Config  `json:"dns01,omitempty"`
+	Domains          []string `json:"domains"`
+	ACMESolverConfig `json:",inline"`
+}
+
+type ACMESolverConfig struct {
+	HTTP01 *ACMECertificateHTTP01Config `json:"http01,omitempty"`
+	DNS01  *ACMECertificateDNS01Config  `json:"dns01,omitempty"`
 }
 
 type ACMECertificateHTTP01Config struct {
@@ -285,7 +352,7 @@ type ACMECertificateDNS01Config struct {
 
 // CertificateStatus defines the observed state of Certificate
 type CertificateStatus struct {
-	Conditions []CertificateCondition `json:"conditions"`
+	Conditions []CertificateCondition `json:"conditions,omitempty"`
 	ACME       *CertificateACMEStatus `json:"acme,omitempty"`
 }
 
@@ -317,20 +384,52 @@ const (
 	// CertificateConditionReady represents the fact that a given Certificate condition
 	// is in ready state.
 	CertificateConditionReady CertificateConditionType = "Ready"
+
+	// CertificateConditionValidationFailed is used to indicate whether a
+	// validation for a Certificate has failed.
+	// This is currently used by the ACME issuer to track when the last
+	// validation was attempted.
+	CertificateConditionValidationFailed CertificateConditionType = "ValidateFailed"
 )
 
 // CertificateACMEStatus holds the status for an ACME issuer
 type CertificateACMEStatus struct {
-	Authorizations []ACMEDomainAuthorization `json:"authorizations"`
+	// Order contains details about the current in-progress ACME Order.
+	Order ACMEOrderStatus `json:"order,omitempty"`
 }
 
-// ACMEDomainAuthorization holds information about an ACME issuers domain
-// authorization
-type ACMEDomainAuthorization struct {
+type ACMEOrderStatus struct {
+	// The URL that can be used to get information about the ACME order.
+	URL        string               `json:"url"`
+	Challenges []ACMEOrderChallenge `json:"challenges,omitempty"`
+}
+
+type ACMEOrderChallenge struct {
+	// The URL that can be used to get information about the ACME challenge.
+	URL string `json:"url"`
+
+	// The URL that can be used to get information about the ACME authorization
+	// associated with the challenge.
+	AuthzURL string `json:"authzURL"`
+
+	// Type of ACME challenge
+	// Either http-01 or dns-01
+	Type string `json:"type"`
+
+	// Domain this challenge corresponds to
 	Domain string `json:"domain"`
-	URI    string `json:"uri"`
-	// Account is the account URI this authorization is valid for
-	Account string `json:"account"`
+
+	// Challenge token for this challenge
+	Token string `json:"token"`
+
+	// Challenge key for this challenge
+	Key string `json:"key"`
+
+	// Set to true if this challenge is for a wildcard domain
+	Wildcard bool `json:"wildcard"`
+
+	// Configuration used to present this challenge
+	ACMESolverConfig `json:",inline"`
 }
 
 type LocalObjectReference struct {

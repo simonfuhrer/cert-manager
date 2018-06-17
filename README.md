@@ -10,7 +10,7 @@ It is loosely based upon the work of [kube-lego](https://github.com/jetstack/kub
 and has borrowed some wisdom from other similar projects e.g.
 [kube-cert-manager](https://github.com/PalmStoneGames/kube-cert-manager).
 
-![cert-manager high level overview diagram](/docs/high-level-overview.png)
+![cert-manager high level overview diagram](/docs/images/high-level-overview.png)
 
 ## Current status
 
@@ -25,43 +25,29 @@ there may be breaking changes that will require changes to *all*
 `Issuer`/`Certificate` resources you have already created. We aim to provide a
 stable API after a 1.0 release.
 
-## Quickstart
+## Documentation
 
-> Prebuilt images for cert-manager are made available on Dockerhub.
-
-### Pre-requisites
-
-* Kubernetes cluster with `CustomResourceDefinition` or `ThirdPartyResource`
-support
-
-### Deploying cert-manager
-
-The easiest way to deploy cert-manager into your cluster is to use the Helm
-chart. For information on how to do this see the [Deploying cert-manager using
-Helm](docs/user-guides/deploying.md) user guide.
-
-### Creating your first Issuer and Certificate
-
-An `Issuer` in cert-manager describes a source of X.509 certificates. A
-`Certificate` in cert-manager defines a desired X.509 certificate. Below is a
-list of user guides that can be used to get started with both resources:
-
-* [Creating a simple CA based Issuer](docs/user-guides/ca-based-issuer.md)
-* [Creating cluster wide Issuers](docs/user-guides/cluster-issuers.md)
-* [Issuing an ACME certificate using HTTP
-validation](docs/user-guides/acme-http-validation.md)
-* [Issuing an ACME certificate using DNS
-validation](docs/user-guides/acme-dns-validation.md)
-
-## Further documentation
-
-For further documentation, please check the [/docs](/docs) directory in this
-repository.
+Documentation for cert-manager can be found at [cert-manager.readthedocs.io](https://cert-manager.readthedocs.io/en/latest/).
+Please make sure to select the correct version of the documentation to view on
+the bottom left of the page.
 
 ## Troubleshooting
 
 If you encounter any issues whilst using cert-manager, and your issue is not
 documented, please [file an issue](https://github.com/jetstack/cert-manager/issues).
+
+## Community
+
+There is a Google Group used for project wide announcements and development coordination.
+Anybody can join the group by visiting [here](https://groups.google.com/forum/#!forum/cert-manager-dev)
+and clicking "Join Group". A Google account is required to join the group.
+
+Once you have become a member, you should receive an invite to the weekly development
+meeting, hosted on **Wednesdays at 4pm UTC** on Zoom.us.
+
+Anyone is welcome to join these calls, even if just to ask questions.
+
+Meeting notes are recorded in [Google docs](https://docs.google.com/document/d/1Tc5t6ylY9dhXAan1OjOoldeaoys1Yh4Ir710ATfBa5U).
 
 ## Contributing
 
@@ -72,10 +58,10 @@ project.
 Please take a look at our [issue tracker](https://github.com/jetstack/cert-manager/issues)
 if you are unsure where to start with getting involved!
 
-We also use the #kube-lego channel on kubernetes.slack.com for chat relating to
+We also use the #cert-manager channel on kubernetes.slack.com for chat relating to
 the project.
 
-Developer documentation should be available soon at [docs/devel](docs/devel).
+Developer documentation is available in the [official documentation](http://cert-manager.readthedocs.io/en/latest/devel/index.html).
 
 ## Changelog
 

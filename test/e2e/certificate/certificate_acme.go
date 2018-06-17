@@ -31,7 +31,7 @@ import (
 )
 
 const invalidACMEURL = "http://not-a-real-acme-url.com"
-const testingACMEEmail = "test@example.com"
+const testingACMEEmail = "e2e@cert-manager.io"
 const testingACMEPrivateKey = "test-acme-private-key"
 const foreverTestTimeout = time.Second * 60
 
@@ -93,42 +93,25 @@ var _ = framework.CertManagerDescribe("ACME Certificate (HTTP01)", func() {
 
 	It("should obtain a signed certificate with a single CN from the ACME server", func() {
 		By("Creating a Certificate")
-		_, err := f.CertManagerClientSet.CertmanagerV1alpha1().Certificates(f.Namespace.Name).Create(util.NewCertManagerACMECertificate(certificateName, certificateSecretName, issuerName, v1alpha1.IssuerKind, acmeIngressClass, util.ACMECertificateDomain))
+		cert, err := f.CertManagerClientSet.CertmanagerV1alpha1().Certificates(f.Namespace.Name).Create(util.NewCertManagerACMECertificate(certificateName, certificateSecretName, issuerName, v1alpha1.IssuerKind, acmeIngressClass, util.ACMECertificateDomain))
 		Expect(err).NotTo(HaveOccurred())
-		By("Waiting for Certificate to become Ready")
-		err = util.WaitForCertificateCondition(f.CertManagerClientSet.CertmanagerV1alpha1().Certificates(f.Namespace.Name),
-			certificateName,
-			v1alpha1.CertificateCondition{
-				Type:   v1alpha1.CertificateConditionReady,
-				Status: v1alpha1.ConditionTrue,
-			}, foreverTestTimeout)
+		f.WaitCertificateIssuedValid(cert)
+	})
+
+	It("should obtain a signed certificate for a long domain using http01 validation", func() {
+		// the maximum length of a single segment of the domain being requested
+		const maxLengthOfDomainSegment = 63
+		By("Creating a Certificate")
+		cert, err := f.CertManagerClientSet.CertmanagerV1alpha1().Certificates(f.Namespace.Name).Create(util.NewCertManagerACMECertificate(certificateName, certificateSecretName, issuerName, v1alpha1.IssuerKind, acmeIngressClass, fmt.Sprintf("%s.%s", cmutil.RandStringRunes(maxLengthOfDomainSegment), util.ACMECertificateDomain)))
 		Expect(err).NotTo(HaveOccurred())
-		By("Verifying TLS certificate exists")
-		secret, err := f.KubeClientSet.CoreV1().Secrets(f.Namespace.Name).Get(certificateSecretName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		if len(secret.Data) != 2 {
-			Fail("Expected 2 keys in ACME certificate secret, but there was %d", len(secret.Data))
-		}
+		f.WaitCertificateIssuedValid(cert)
 	})
 
 	It("should obtain a signed certificate with a CN and single subdomain as dns name from the ACME server", func() {
 		By("Creating a Certificate")
-		_, err := f.CertManagerClientSet.CertmanagerV1alpha1().Certificates(f.Namespace.Name).Create(util.NewCertManagerACMECertificate(certificateName, certificateSecretName, issuerName, v1alpha1.IssuerKind, acmeIngressClass, util.ACMECertificateDomain, fmt.Sprintf("%s.%s", cmutil.RandStringRunes(5), util.ACMECertificateDomain)))
+		cert, err := f.CertManagerClientSet.CertmanagerV1alpha1().Certificates(f.Namespace.Name).Create(util.NewCertManagerACMECertificate(certificateName, certificateSecretName, issuerName, v1alpha1.IssuerKind, acmeIngressClass, util.ACMECertificateDomain, fmt.Sprintf("%s.%s", cmutil.RandStringRunes(5), util.ACMECertificateDomain)))
 		Expect(err).NotTo(HaveOccurred())
-		By("Waiting for Certificate to become Ready")
-		err = util.WaitForCertificateCondition(f.CertManagerClientSet.CertmanagerV1alpha1().Certificates(f.Namespace.Name),
-			certificateName,
-			v1alpha1.CertificateCondition{
-				Type:   v1alpha1.CertificateConditionReady,
-				Status: v1alpha1.ConditionTrue,
-			}, foreverTestTimeout)
-		Expect(err).NotTo(HaveOccurred())
-		By("Verifying TLS certificate exists")
-		secret, err := f.KubeClientSet.CoreV1().Secrets(f.Namespace.Name).Get(certificateSecretName, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		if len(secret.Data) != 2 {
-			Fail("Expected 2 keys in ACME certificate secret, but there was %d", len(secret.Data))
-		}
+		f.WaitCertificateIssuedValid(cert)
 	})
 
 	It("should fail to obtain a certificate for an invalid ACME dns name", func() {

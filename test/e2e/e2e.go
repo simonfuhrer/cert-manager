@@ -14,13 +14,16 @@ limitations under the License.
 package e2e
 
 import (
+	"io"
 	"os"
 	"os/exec"
+	"path"
 	"testing"
 
 	"github.com/golang/glog"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
+	"github.com/onsi/ginkgo/reporters"
 	"github.com/onsi/gomega"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
@@ -31,6 +34,8 @@ import (
 	_ "github.com/jetstack/cert-manager/test/e2e/ingress"
 	_ "github.com/jetstack/cert-manager/test/e2e/issuer"
 )
+
+const certManagerDeploymentNamespace = "cert-manager"
 
 // TestE2E checks configuration parameters (specified through flags) and then runs
 // E2E tests using the Ginkgo runner.
@@ -45,21 +50,28 @@ func RunE2ETests(t *testing.T) {
 	}
 
 	glog.Infof("Installing cert-manager helm chart")
-	InstallHelmChart(t, releaseName, "./contrib/charts/cert-manager", "cert-manager", "./test/fixtures/cert-manager-values.yaml")
+	InstallHelmChart(t, releaseName, "./contrib/charts/cert-manager", certManagerDeploymentNamespace, "./test/fixtures/cert-manager-values.yaml")
 
-	glog.Infof("Installing boulder chart")
-	// 10 minute timeout for boulder install due to large images
+	glog.Infof("Installing pebble chart")
+	// 10 minute timeout for pebble install due to large images
 	extraArgs := []string{"--timeout", "600"}
-	if framework.TestContext.BoulderImageRepo != "" {
-		extraArgs = append(extraArgs, "--set", "image.repository="+framework.TestContext.BoulderImageRepo)
+	if framework.TestContext.PebbleImageRepo != "" {
+		extraArgs = append(extraArgs, "--set", "image.repository="+framework.TestContext.PebbleImageRepo)
 	}
-	if framework.TestContext.BoulderImageTag != "" {
-		extraArgs = append(extraArgs, "--set", "image.tag="+framework.TestContext.BoulderImageTag)
+	if framework.TestContext.PebbleImageTag != "" {
+		extraArgs = append(extraArgs, "--set", "image.tag="+framework.TestContext.PebbleImageTag)
 	}
-	InstallHelmChart(t, "boulder", "./contrib/charts/boulder", "boulder", "./test/fixtures/boulder-values.yaml", extraArgs...)
+	InstallHelmChart(t, "pebble", "./contrib/charts/pebble", "pebble", "./test/fixtures/pebble-values.yaml", extraArgs...)
+
+	InstallHelmChart(t, "vault", "./contrib/charts/vault", "vault", "./test/fixtures/vault-values.yaml")
+
 	glog.Infof("Starting e2e run %q on Ginkgo node %d", framework.RunId, config.GinkgoConfig.ParallelNode)
 
-	if !ginkgo.RunSpecs(t, "cert-manager e2e suite") {
+	var r []ginkgo.Reporter
+	if framework.TestContext.ReportDir != "" {
+		r = append(r, reporters.NewJUnitReporter(path.Join(framework.TestContext.ReportDir, "junit_00.xml")))
+	}
+	if !ginkgo.RunSpecsWithDefaultAndCustomReporters(t, "cert-manager e2e suite", r) {
 		PrintPodLogs(t)
 	}
 }
@@ -80,21 +92,30 @@ func InstallHelmChart(t *testing.T, releaseName, chartName, namespace, values st
 	}
 }
 
+func ArtifactWriteCloser(name string) (io.WriteCloser, error) {
+	f, err := os.OpenFile(path.Join(framework.TestContext.ReportDir, name), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
 func PrintPodLogs(t *testing.T) {
 	glog.Infof("Printing cert-manager logs")
-	cmd := exec.Command("kubectl", "logs", "--namespace", "cert-manager", "-l", "app=cert-manager", "-l", "release=cm", "-c", "cert-manager")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err := cmd.Run()
+	cmOut, err := ArtifactWriteCloser("cert-manager-logs.txt")
 	if err != nil {
-		t.Errorf("Error printing cert-manager logs: %s", err)
+		t.Errorf("Error saving cert-manager logs")
+		t.FailNow()
+		return
 	}
-	glog.Infof("Printing ingress-shim logs")
-	cmdShim := exec.Command("kubectl", "logs", "--namespace", "cert-manager", "-l", "app=cert-manager", "-l", "release=cm", "-c", "ingress-shim")
-	cmdShim.Stdout = os.Stdout
-	cmdShim.Stderr = os.Stderr
-	err = cmdShim.Run()
+	defer cmOut.Close()
+	cmd := exec.Command("kubectl", "logs", "--namespace", "cert-manager", "-l", "app=cert-manager", "-l", "release=cm", "-c", "cert-manager", "--tail", "10000")
+	cmd.Stdout = cmOut
+	cmd.Stderr = cmOut
+	err = cmd.Run()
 	if err != nil {
-		t.Errorf("Error printing ingress-shim logs: %s", err)
+		t.Errorf("Error getting cert-manager logs: %v", err)
+		t.FailNow()
+		return
 	}
 }

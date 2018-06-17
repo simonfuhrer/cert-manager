@@ -32,10 +32,13 @@ type Context struct {
 	// instances
 	IssuerFactory issuer.Factory
 
-	// Namespace is a namespace to operate within. This should be used when
-	// constructing SharedIndexInformers for the informer factory.
-	Namespace string
 	// ClusterResourceNamespace is the namespace to store resources created by
 	// non-namespaced resources (e.g. ClusterIssuer) in.
 	ClusterResourceNamespace string
+
+	// Default issuer/certificates details consumed by ingress-shim
+	DefaultIssuerName                  string
+	DefaultIssuerKind                  string
+	DefaultACMEIssuerChallengeType     string
+	DefaultACMEIssuerDNS01ProviderName string
 }

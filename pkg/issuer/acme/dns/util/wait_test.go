@@ -36,10 +36,10 @@ var findZoneByFqdnTests = []struct {
 	fqdn string
 	zone string
 }{
-	{"mail.google.com.", "google.com."}, // domain is a CNAME
-	{"foo.google.com.", "google.com."},  // domain is a non-existent subdomain
-	// TODO: work out why this test doesn't work
-	//{"example.com.ac.", "ac."},          // domain is a eTLD
+	{"mail.google.com.", "google.com."},             // domain is a CNAME
+	{"foo.google.com.", "google.com."},              // domain is a non-existent subdomain
+	{"example.com.ac.", "ac."},                      // domain is a eTLD
+	{"cross-zone-example.assets.sh.", "assets.sh."}, // domain is a cross-zone CNAME
 }
 
 var checkAuthoritativeNssTests = []struct {
@@ -55,6 +55,10 @@ var checkAuthoritativeNssTests = []struct {
 	{"ns1.google.com.", "", []string{"ns2.google.com."},
 		false,
 	},
+	// TXT RR /w unexpected value
+	{"8.8.8.8.asn.routeviews.org.", "fe01=", []string{"asnums.routeviews.org."},
+		false,
+	},
 }
 
 var checkAuthoritativeNssTestsErr = []struct {
@@ -62,13 +66,9 @@ var checkAuthoritativeNssTestsErr = []struct {
 	ns          []string
 	error       string
 }{
-	// TXT RR /w unexpected value
-	{"8.8.8.8.asn.routeviews.org.", "fe01=", []string{"asnums.routeviews.org."},
-		"did not return the expected TXT record",
-	},
-	// No TXT RR
-	{"ns1.google.com.", "fe01=", []string{"ns2.google.com."},
-		"did not return the expected TXT record",
+	// invalid nameserver
+	{"8.8.8.8.asn.routeviews.org.", "fe01=", []string{"invalidns.com."},
+		"",
 	},
 }
 

@@ -8,7 +8,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/miekg/dns"
-	"golang.org/x/net/publicsuffix"
 )
 
 type preCheckDNSFunc func(fqdn, value string) (bool, error)
@@ -23,8 +22,8 @@ var (
 const defaultResolvConf = "/etc/resolv.conf"
 
 var defaultNameservers = []string{
-	"google-public-dns-a.google.com:53",
-	"google-public-dns-b.google.com:53",
+	"8.8.8.8:53",
+	"8.8.4.4:53",
 }
 
 var RecursiveNameservers = getNameservers(defaultResolvConf, defaultNameservers)
@@ -86,7 +85,8 @@ func checkAuthoritativeNss(fqdn, value string, nameservers []string) (bool, erro
 			return false, err
 		}
 
-		if r.Rcode != dns.RcodeSuccess {
+		// NXDomain response is not really an error, just waiting for propagation to happen
+		if !(r.Rcode == dns.RcodeSuccess || r.Rcode == dns.RcodeNameError) {
 			return false, fmt.Errorf("NS %s returned %s for %s", ns, dns.RcodeToString[r.Rcode], fqdn)
 		}
 
@@ -102,7 +102,7 @@ func checkAuthoritativeNss(fqdn, value string, nameservers []string) (bool, erro
 		}
 
 		if !found {
-			return false, fmt.Errorf("nameserver %q did not return the expected TXT record for domain %q", ns, fqdn)
+			return false, nil
 		}
 	}
 
@@ -128,7 +128,7 @@ func dnsQuery(fqdn string, rtype uint16, nameservers []string, recursive bool) (
 
 		if err == dns.ErrTruncated {
 			tcp := &dns.Client{Net: "tcp", Timeout: DNSTimeout}
-			// If the TCP request suceeds, the err will reset to nil
+			// If the TCP request succeeds, the err will reset to nil
 			in, _, err = tcp.Exchange(m, ns)
 		}
 
@@ -176,10 +176,6 @@ func FindZoneByFqdn(fqdn string, nameservers []string) (string, error) {
 	labelIndexes := dns.Split(fqdn)
 	for _, index := range labelIndexes {
 		domain := fqdn[index:]
-		// Give up if we have reached the TLD
-		if isTLD(domain) {
-			break
-		}
 
 		in, err := dnsQuery(domain, dns.TypeSOA, nameservers, true)
 		if err != nil {
@@ -194,6 +190,13 @@ func FindZoneByFqdn(fqdn string, nameservers []string) (string, error) {
 
 		// Check if we got a SOA RR in the answer section
 		if in.Rcode == dns.RcodeSuccess {
+
+			// CNAME records cannot/should not exist at the root of a zone.
+			// So we skip a domain when a CNAME is found.
+			if dnsMsgContainsCNAME(in) {
+				continue
+			}
+
 			for _, ans := range in.Answer {
 				if soa, ok := ans.(*dns.SOA); ok {
 					zone := soa.Hdr.Name
@@ -207,10 +210,12 @@ func FindZoneByFqdn(fqdn string, nameservers []string) (string, error) {
 	return "", fmt.Errorf("Could not find the start of authority")
 }
 
-func isTLD(domain string) bool {
-	publicsuffix, _ := publicsuffix.PublicSuffix(UnFqdn(domain))
-	if publicsuffix == UnFqdn(domain) {
-		return true
+// dnsMsgContainsCNAME checks for a CNAME answer in msg
+func dnsMsgContainsCNAME(msg *dns.Msg) bool {
+	for _, ans := range msg.Answer {
+		if _, ok := ans.(*dns.CNAME); ok {
+			return true
+		}
 	}
 	return false
 }
